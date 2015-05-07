@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">RikaiDroid</string>
+
+    <string name="hello_world">寿司が食べたい。</string>
+    <string name="action_settings">Settings</string>
+    <string name="no_aedict">Aedict3 was not found. Please install and try again</string>
+</resources>
