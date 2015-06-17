@@ -63,10 +63,6 @@ public class MainActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        if (!isAedictPresent(this)) {
-            Toast.makeText(this, R.string.no_aedict, Toast.LENGTH_LONG);
-            finish();
-        }
         mWebView = (WebView) findViewById(R.id.webview);
         mWebClient = new WebViewClient() {
             @Override
