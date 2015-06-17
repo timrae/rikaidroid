@@ -169,6 +169,13 @@ public class MainActivity extends ActionBarActivity {
             new DownloadWebpageTask().execute(searchQuery);
             return;
         }
+        /* else {
+            Tokenizer tokenizer = new Tokenizer.Builder().build();
+            List<Token> tokens = tokenizer.tokenize(searchQuery);
+            StringBuilder builder = getHtmlPreamble();
+            addKuromojiItems(builder, tokens);
+            displayHtml(builder);
+        }*/
         // Analyzer with Aedict if present
         if (isAedictPresent(this)) {
             searchAedict(searchQuery);
@@ -241,6 +248,30 @@ public class MainActivity extends ActionBarActivity {
             builder.append("<br><br>");
         }
     }
+
+    /* Non-web-version of kuromoji
+    private void addKuromojiItems(StringBuilder builder, List<Token> tokens) {
+        for (int i = 0; i < tokens.size(); i++) {
+            String reading;
+            String surface;
+            Token token = tokens.get(i);
+            //base = token.getString("base");
+            reading = token.getReading();
+            surface = token.getSurfaceForm();
+
+            String formattedText;
+            if (hasKanji(surface)) {
+                formattedText = makeFurigana(surface, katToHira(reading));
+                //formattedText = String.format(RUBY, surface, katToHira(reading));
+                if (isAedictPresent(this)) {
+                    formattedText = String.format(INTENT_URL, token.getBaseForm(), formattedText);
+                }
+            } else {
+                formattedText = surface;
+            }
+            builder.append(formattedText);
+        }
+    }    */
 
         /*
         // Get clipboard
