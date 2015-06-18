@@ -33,6 +33,7 @@ import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -50,14 +51,15 @@ public class MainActivity extends ActionBarActivity {
     private static final int REQUEST_AEDICT_ANALYSIS = 101;
     private static final Pattern KANJI_REGEXP = Pattern.compile("[\u4e00-\u9faf]+");
     private static final Pattern KANA_REGEXP = Pattern.compile("[\u3041-\u309e\uff66-\uff9d\u30a1-\u30fe]+");
-    private static final Pattern FURIGANA_REGEXP = Pattern.compile(" ?([^ >]+?)\\[(.+?)\\]");
     private static final String RUBY = "<ruby><rb>%s</rb><rt>%s</rt></ruby>";
+    private static final String AEDICT_SEARCH_INTENT = "sk.baka.aedict3.action.ACTION_SEARCH_JMDICT_NOUI";
     private static final String AEDICT_INTENT = "sk.baka.aedict3.action.ACTION_SEARCH_JMDICT";
     private static final String INTENT_URL = "<a href=\"lookup://%s\">%s</a>";
     private static final boolean USE_KUROMOJI_WEB = true;
     private WebView mWebView;
     private EditText mEditText;
     private WebViewClient mWebClient;
+    private ProgressBar mProgressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +75,7 @@ public class MainActivity extends ActionBarActivity {
                     Intent i = new Intent(AEDICT_INTENT);
                     i.putExtra("kanjis", query);
                     i.putExtra("showEntryDetailOnSingleResult", true);
+                    i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(i);
                     view.reload();
                     return true;
@@ -86,6 +89,10 @@ public class MainActivity extends ActionBarActivity {
         };
         mWebView.setWebViewClient(mWebClient);
         mEditText = (EditText) findViewById(R.id.search_src_text);
+        mProgressBar = (ProgressBar) findViewById(R.id.progress_bar);
+        if (mProgressBar != null) {
+            mProgressBar.setVisibility(View.VISIBLE);
+        }
 
     }
 
@@ -102,11 +109,6 @@ public class MainActivity extends ActionBarActivity {
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
 
         return super.onOptionsItemSelected(item);
     }
@@ -152,9 +154,10 @@ public class MainActivity extends ActionBarActivity {
 
     public void searchAedict(String query) {
         String pasteData = mEditText.getText().toString();
-        final Intent intent = new Intent(AEDICT_INTENT);
+        final Intent intent = new Intent(AEDICT_SEARCH_INTENT);
         intent.putExtra("kanjis",pasteData);
         intent.putExtra("return_results", true);
+        //intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivityForResult(intent, REQUEST_AEDICT_ANALYSIS);
     }
 
@@ -184,6 +187,9 @@ public class MainActivity extends ActionBarActivity {
         builder.append("</body></html>");
         // Display text in webpage
         mWebView.loadDataWithBaseURL(null, builder.toString(), "text/html", "UTF-8", null);
+        if (mProgressBar != null) {
+            mProgressBar.setVisibility(View.GONE);
+        }
     }
 
     private void addKuromojiWebItems(StringBuilder builder, JSONArray tokens) {
@@ -225,46 +231,65 @@ public class MainActivity extends ActionBarActivity {
 
     private void addAedictItems(StringBuilder builder, List<HashMap<String, String>> items) {
         String query = mEditText.getText().toString();
+        int start;
+        int end;
+        int lastEnd = 0;
+        // Word match; discard all but the first entry
+        if (items.get(0).get("position_in_sentence").equals("")) {
+            HashMap<String, String> item0 = items.get(0);
+            String reinflectedReading = reinflectReading(query, item0.get("kanji"), item0.get("reading"));
+            String formattedText = makeFurigana(query, reinflectedReading);
+            builder.append(formattedText);
+            return;
+        }
+        // Sentence match
         for (HashMap<String, String> item : items) {
-            String furigana = item.get("furigana");
-            Matcher m = FURIGANA_REGEXP.matcher(furigana);
-            // Take the first match
-            if (m.find()) {
-                String kanji = m.group(1);  // Kanji from the furigana expression
-                String rubyText = FURIGANA_REGEXP.matcher(m.group(0)).replaceAll(RUBY);
+            // Get the position in the original sentence of the current item
+            String[] position = item.get("position_in_sentence").split(",");
+            if (position.length != 2) {
+                Log.e(TAG, "incorrect position variable returned by Aedict");
             }
-            builder.append(item.get("kanji") + "&nbsp;&nbsp;&nbsp;&nbsp;" + item.get("reading"));
-            builder.append("<br><br>");
+            try {
+                start = Integer.parseInt(position[0]);
+                end = start + Integer.parseInt(position[1]);
+            } catch (NumberFormatException e) {
+                Log.e(TAG, "Inalid position indices returned by Aedict");
+                return;
+            }
+            // Get the word and the furigana
+            String originalWord = query.substring(start, end);
+            // Prepend any characters which were ignored by Aedict
+            String preamble = query.substring(lastEnd, start);
+            builder.append(preamble);
+            // Prepend the word with furigana
+            if (hasKanji(originalWord)) {
+                //String furigana = item.get("furigana_anki").split(",")[0];
+                String kanji = item.get("kanji").split(",")[0];
+                String reading = item.get("reading").split(",")[0];
+                if (isKanji(originalWord)) {
+                    // Use Aedict's reading directly if the word was entirely made of kanji
+                    String formattedText = String.format(RUBY, originalWord, reading);
+                    builder.append(formattedText);
+                } else {
+                    try {
+                        String reinflectedReading = reinflectReading(originalWord, kanji, reading);
+                        String formattedText = makeFurigana(originalWord, reinflectedReading);
+                        builder.append(formattedText);
+                    } catch (Exception e) {
+                        // If error then just skip the word
+                        Log.e(TAG, "Exception making furigana");
+                        builder.append(originalWord);
+                    }
+                }
+            } else {
+                // If no kanji in the word then just print it verbatim
+                builder.append(originalWord);
+            }
+            // Remember the end index of current match in original sentence
+            lastEnd = end;
         }
     }
 
-        /*
-        // Get clipboard
-        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        String pasteData = "";
-        if (!(clipboard.hasPrimaryClip())) {
-            return;
-        }
-        // Load data from clipboard and put it into Webview
-        ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
-        pasteData = item.getText().toString();
-        if (pasteData != null) {
-            if (URLUtil.isValidUrl(pasteData)) {
-                // Load text as URL
-                mWebView.loadUrl(pasteData);
-            } else {
-                // Otherwise just load as ordinary text
-                StringBuilder builder = new StringBuilder();
-                mWebView.loadData(builder.toString(), null, null);
-            }
-        } else {
-            Uri pasteUri = item.getUri();
-            if (pasteUri != null) {
-                mWebView.loadUrl(pasteUri.toString());
-            } else {
-                Log.e(TAG, "No valid content in the clipboard");
-            }
-        }*/
 
     public static boolean isAedictPresent(Activity context) {
         final Intent intent = new Intent("sk.baka.aedict3.action.ACTION_SEARCH_JMDICT");
@@ -363,6 +388,26 @@ public class MainActivity extends ActionBarActivity {
             output.append(String.format(RUBY, currentKanji, currentReading));
         }
         return output.toString().trim();
+    }
+
+    /**
+     * Reinflect the reading returned by Aedict according to the original word
+     * @param original original word looked up by Aedict
+     * @param kanji kanji of result returned by Aedict (after de-inflection)
+     * @param reading reading of result returned by Aedict (after de-inflection)
+     * @return what the reading would look like before the de-inflection
+     */
+    private String reinflectReading(String original, String kanji, String reading) {
+        Matcher matcher = KANJI_REGEXP.matcher(kanji);
+        int end = 0;
+        while (matcher.find()) {
+            // do nothing so that we get the last hit
+            end = matcher.end();
+        }
+        String originalVerbEnding = original.substring(end);
+        String newVerbEnding = kanji.substring(end);
+        String readingBase = reading.substring(0, reading.length() - newVerbEnding.length());
+        return readingBase + originalVerbEnding;
     }
 
     private String katToHira(String katakana) {

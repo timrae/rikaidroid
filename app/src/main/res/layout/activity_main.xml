@@ -23,12 +23,21 @@
             android:text="@android:string/ok"
             android:onClick="analyze"/>
     </LinearLayout>
-
-    <WebView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/webview"
-        android:layout_width="fill_parent"
+    <FrameLayout
         android:layout_height="0px"
         android:layout_weight="1"
-        android:layout_below="@id/search_src_text">
-    </WebView>
+        android:layout_below="@id/search_src_text"
+        android:layout_width="fill_parent">
+        <WebView xmlns:android="http://schemas.android.com/apk/res/android"
+            android:id="@+id/webview"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent">
+        </WebView>
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|center_horizontal"
+            android:visibility="gone"/>
+    </FrameLayout>
 </LinearLayout>
