@@ -34,7 +34,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ProgressBar;
-import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -214,7 +213,6 @@ public class MainActivity extends ActionBarActivity {
                         }
                     }
                     formattedText = makeFurigana(surface, katToHira(reading));
-                    //formattedText = String.format(RUBY, surface, katToHira(reading));
                     if (isAedictPresent(this)) {
                         formattedText = String.format(INTENT_URL, token.getString("base"), formattedText);
                     }
@@ -358,10 +356,11 @@ public class MainActivity extends ActionBarActivity {
         } else {
             kanaMatcher.reset();
         }
+        // Keep track of number of kana added to output to see if the algorithm was successful
+        int numKana = output.length();
         // Now step through each kanji
         int lastKanaEnd = 0;
         int lastReadingKanaEnd = 0;
-
         while (kanaMatcher.find()) {
             // Find the next kana in the kanji string
             int kanaStart = kanaMatcher.start();
@@ -371,7 +370,8 @@ public class MainActivity extends ActionBarActivity {
             // Set the end index of current kana in kanji string for next loop iteration
             lastKanaEnd = kanaMatcher.end();
             // Find the current kana in the reading string
-            int readingKanaStart = reading.indexOf(currentKana, lastReadingKanaEnd);
+            // Not perfect. Here we take the first occurrence at least number of kanji after the last kana
+            int readingKanaStart = reading.indexOf(currentKana, lastReadingKanaEnd + currentKanji.length());
             // Extract the reading in-between the kana found in the kanji this time and last time
             String currentReading = reading.substring(lastReadingKanaEnd, readingKanaStart);
             // Set the end index of current kana in reading string for next loop iteration
@@ -380,12 +380,19 @@ public class MainActivity extends ActionBarActivity {
             output.append(String.format(RUBY, currentKanji, currentReading));
             // Append the current kana to the StringBuilder (outside the furigana)
             output.append(currentKana);
+            // Keep track of number of kana addded to see if the algorithm was successful
+            numKana += currentReading.length() + currentKana.length();
         }
         // Add any kanji / reading at the end of the string to the builder
         if (lastKanaEnd < kanji.length()) {
             String currentKanji = kanji.substring(lastKanaEnd+1);
             String currentReading = reading.substring(lastReadingKanaEnd + 1);
             output.append(String.format(RUBY, currentKanji, currentReading));
+            numKana += currentReading.length();
+        }
+        // Do sanity check, returning naiive substitution if it failed
+        if (numKana < reading.length()) {
+            return String.format(RUBY, kanji, reading);
         }
         return output.toString().trim();
     }
