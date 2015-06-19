@@ -18,6 +18,7 @@ package com.timrae.rikaidroid;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,7 +35,6 @@ import java.net.URL;
 public class KuromojiWeb {
     private static final String HOST_URL = "http://atilika.org/kuromoji/rest/tokenizer/tokenize";
     private static final int TOKENIZE_MODE = 0;
-    private static final int BUFFER_SIZE = 10240;
 
     // Given a URL, establishes an HttpUrlConnection and retrieves
 // the web page content as a InputStream, which it returns as
@@ -76,12 +76,14 @@ public class KuromojiWeb {
 
     // Reads an InputStream and converts it to a String.
     private String readStream(InputStream stream) throws IOException {
-        Reader reader = null;
-        reader = new InputStreamReader(stream, "UTF-8");
-        char[] buffer = new char[BUFFER_SIZE];
-        reader.read(buffer);
-        return new String(buffer);
-        //TODO:  What if the result doesn't fit into the buffer?
+        StringBuilder content = new StringBuilder();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
+        String line;
+        // read from the urlconnection via the bufferedreader
+        while ((line = reader.readLine()) != null) {
+            content.append(line + "\n");
+        }
+        return content.toString();
     }
 
     // Adds the input arguments to query
